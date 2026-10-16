@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Asistente de la tienda</title>
+<style>
+:root{--tinta:#1f2a44;--tiza:#f2f4f7;--papel:#fff;--etiqueta:#c8372d;--linea:#d5dae3}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font:16px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--tiza);color:var(--tinta);display:flex;justify-content:center}
+.chat{width:100%;max-width:560px;height:100%;display:flex;flex-direction:column;background:var(--papel)}
+header{padding:14px 16px;border-bottom:2px dashed var(--linea);display:flex;align-items:center;gap:10px}
+header .tag{width:12px;height:12px;border-radius:50%;background:var(--etiqueta);box-shadow:0 0 0 3px var(--papel),0 0 0 4px var(--etiqueta)}
+header h1{font:700 1.15rem Georgia,serif;margin:0}
+header small{display:block;font-size:.8rem;opacity:.7}
+#log{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px}
+.m{max-width:85%;padding:10px 13px;border-radius:14px;white-space:pre-wrap;word-wrap:break-word}
+.bot{background:var(--tiza);border-bottom-left-radius:4px;align-self:flex-start}
+.yo{background:var(--tinta);color:#fff;border-bottom-right-radius:4px;align-self:flex-end}
+.sug{display:flex;flex-wrap:wrap;gap:8px;padding:0 16px 8px}
+.sug button{border:1px solid var(--tinta);background:var(--papel);color:var(--tinta);border-radius:999px;padding:6px 12px;font:inherit;font-size:.85rem;cursor:pointer}
+form{display:flex;gap:8px;padding:12px;border-top:1px solid var(--linea);padding-bottom:max(12px,env(safe-area-inset-bottom))}
+input{flex:1;min-width:0;padding:12px;border:1px solid var(--linea);border-radius:10px;font:inherit}
+form button{border:0;background:var(--etiqueta);color:#fff;border-radius:10px;padding:0 18px;font:inherit;font-weight:600;cursor:pointer}
+button:disabled{opacity:.5}
+:focus-visible{outline:3px solid var(--etiqueta);outline-offset:2px}
+</style>
+</head>
+<body>
+<main class="chat">
+  <header>
+    <span class="tag"></span>
+    <div><h1 id="nombre">Tienda</h1><small>Asistente virtual</small></div>
+  </header>
+  <div id="log" aria-live="polite"></div>
+  <div class="sug" id="sug"></div>
+  <form id="f">
+    <input id="t" placeholder="Escribe tu pregunta" autocomplete="off" aria-label="Mensaje">
+    <button id="b">Enviar</button>
+  </form>
+</main>
+<script>
+// ====== CONFIGURA AQUÍ ======
+const CONFIG = {
+  nombre: "Nombre de la tienda",
+  // URL de tu backend (Cloud Function / Worker). Vacío = modo demo sin IA.
+  endpoint: "",
+  saludo: "¡Hola! Soy el asistente de la tienda. ¿Buscas alguna prenda, talla u horario?",
+  sugerencias: ["¿Qué tallas tienen?", "¿Cuál es el horario?", "¿Hacen cambios?"]
+};
+// ============================
+
+const log = document.getElementById("log"), f = document.getElementById("f"),
+      t = document.getElementById("t"), b = document.getElementById("b"),
+      sug = document.getElementById("sug");
+const historial = [];
+document.getElementById("nombre").textContent = CONFIG.nombre;
+document.title = CONFIG.nombre;
+
+function pinta(texto, clase){
+  const d = document.createElement("div");
+  d.className = "m " + clase; d.textContent = texto;
+  log.appendChild(d); log.scrollTop = log.scrollHeight; return d;
+}
+
+async function enviar(texto){
+  sug.innerHTML = "";
+  pinta(texto, "yo"); historial.push({role:"user", content:texto});
+  b.disabled = true;
+  const espera = pinta("Escribiendo…", "bot");
+  try{
+    let respuesta;
+    if(!CONFIG.endpoint){
+      respuesta = "Modo demo: conecta un backend en CONFIG.endpoint para respuestas con IA.";
+    } else {
+      const r = await fetch(CONFIG.endpoint, {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({messages: historial.slice(-12)})
+      });
+      if(!r.ok) throw new Error(r.status);
+      respuesta = (await r.json()).reply;
+    }
+    espera.textContent = respuesta;
+    historial.push({role:"assistant", content:respuesta});
+  }catch(e){
+    espera.textContent = "No pude responder ahora. Intenta de nuevo en un momento.";
+    historial.pop();
+  }
+  b.disabled = false; t.focus(); log.scrollTop = log.scrollHeight;
+}
+
+f.addEventListener("submit", e => {
+  e.preventDefault();
+  const v = t.value.trim(); if(!v) return;
+  t.value = ""; enviar(v);
+});
+
+pinta(CONFIG.saludo, "bot");
+CONFIG.sugerencias.forEach(s => {
+  const x = document.createElement("button");
+  x.type = "button"; x.textContent = s; x.onclick = () => enviar(s);
+  sug.appendChild(x);
+});
+</script>
+</body>
+</html>
